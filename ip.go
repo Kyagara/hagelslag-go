@@ -7,7 +7,7 @@ import (
 )
 
 // Parse an IP string into its segments.
-func parseIP(ip string, seg_a *uint8, seg_b *uint8, seg_c *uint8, seg_d *uint8) error {
+func parseIP(ip string, segA *uint8, segB *uint8, segC *uint8, segD *uint8) error {
 	octets := strings.Split(ip, ".")
 	if len(octets) != 4 {
 		return fmt.Errorf("invalid IP address '%s'", ip)
@@ -33,41 +33,41 @@ func parseIP(ip string, seg_a *uint8, seg_b *uint8, seg_c *uint8, seg_d *uint8) 
 		return fmt.Errorf("invalid IP address '%s', %s", ip, err)
 	}
 
-	*seg_a = uint8(newSegA)
-	*seg_b = uint8(newSegB)
-	*seg_c = uint8(newSegC)
-	*seg_d = uint8(newSegD)
+	*segA = uint8(newSegA)
+	*segB = uint8(newSegB)
+	*segC = uint8(newSegC)
+	*segD = uint8(newSegD)
 
 	return nil
 }
 
 // Check if the IP is in any reserved range, skips to the next available range if it is.
-func isReserved(seg_a *uint8, seg_b *uint8, seg_c *uint8) bool {
+func isReserved(segA *uint8, segB *uint8, segC *uint8) bool {
 	// 10.x.x.x
 	// 127.x.x.x
-	if *seg_a == 10 || *seg_a == 127 {
-		*seg_a = *seg_a + 1
+	if *segA == 10 || *segA == 127 {
+		*segA++
 		return true
 	}
 
 	// 169.254.x.x
-	if *seg_a == 169 && *seg_b == 254 {
-		*seg_b = 255
+	if *segA == 169 && *segB == 254 {
+		*segB = 255
 		return true
 	}
 
 	// 172.(>= 16 && <= 31).x.x
-	if *seg_a == 172 && *seg_b >= 16 && *seg_b <= 31 {
-		*seg_b = 32
+	if *segA == 172 && *segB >= 16 && *segB <= 31 {
+		*segB = 32
 		return true
 	}
 
-	if *seg_a == 192 {
-		if *seg_b == 0 {
+	if *segA == 192 {
+		if *segB == 0 {
 			// 192.0.0.x
 			// 192.0.2.x
-			if *seg_c == 0 || *seg_c == 2 {
-				*seg_c = *seg_c + 1
+			if *segC == 0 || *segC == 2 {
+				*segC++
 				return true
 			}
 
@@ -75,14 +75,14 @@ func isReserved(seg_a *uint8, seg_b *uint8, seg_c *uint8) bool {
 		}
 
 		// 192.88.99.0
-		if *seg_b == 88 && *seg_c == 99 {
-			*seg_c = 100
+		if *segB == 88 && *segC == 99 {
+			*segC = 100
 			return true
 		}
 
 		// 192.168.x.x
-		if *seg_b == 168 {
-			*seg_b = 169
+		if *segB == 168 {
+			*segB = 169
 			return true
 		}
 
@@ -90,14 +90,14 @@ func isReserved(seg_a *uint8, seg_b *uint8, seg_c *uint8) bool {
 	}
 
 	// 198.51.100.x
-	if *seg_a == 198 && *seg_b == 51 && *seg_c == 100 {
-		*seg_c = 101
+	if *segA == 198 && *segB == 51 && *segC == 100 {
+		*segC = 101
 		return true
 	}
 
 	// 203.0.113.x
-	if *seg_a == 203 && *seg_b == 0 && *seg_c == 113 {
-		*seg_c = 114
+	if *segA == 203 && *segB == 0 && *segC == 113 {
+		*segC = 114
 		return true
 	}
 

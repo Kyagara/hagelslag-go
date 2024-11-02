@@ -52,7 +52,7 @@ func (s VelorenScanner) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 	p := binary.LittleEndian.Uint64(response[4:12])
 
 	// version, not used for now
-	//v := binary.BigEndian.Uint16(response[12:])
+	// v := binary.BigEndian.Uint16(response[12:])
 
 	// Set 'P' from response to the request
 	binary.LittleEndian.PutUint64(request[2:12], p)

@@ -31,11 +31,11 @@ Data will be inserted in the mongodb `hagelslag` database inside the `<scanner>`
 ```json
 {
     // ip address
-    _id: "",
+    "_id": "<ip>",
     // time in milliseconds
-    latency: <number>
-    // html response (headers and body) or json
-    data: <string>
+    "latency": 0,
+    // data can be a string or json
+    "data": ""
 }
 ```
 
@@ -46,8 +46,6 @@ go install github.com/Kyagara/hagelslag-go@latest
 ```
 
 ## Ideas
-
-- Use zerolog instead of fmt.
 
 - The amount of workers/tasks running might not be good, find a better default based on some values.
 

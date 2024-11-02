@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -30,9 +32,9 @@ type Scanner interface {
 	// 'tcp' or 'udp'
 	Network() string
 	// Scans and returns the response and latency
-	Scan(string, net.Conn) ([]byte, int64, error)
+	Scan(ip string, conn net.Conn) ([]byte, int64, error)
 	// Saves the response to the database
-	Save(string, int64, []byte, *mongo.Collection) error
+	Save(ip string, latency int64, data []byte, collection *mongo.Collection) error
 }
 
 func main() {
@@ -41,6 +43,8 @@ func main() {
 	numWorkers := flag.Int("workers", runtime.NumCPU(), "Number of workers to use (default: number of threads)")
 	tasksPerThread := flag.Int("tasks", 512, "Tasks per thread (default: 512)")
 	flag.Parse()
+
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
 	var scanner Scanner
 	switch *scannerName {
@@ -59,16 +63,16 @@ func main() {
 	ips := make(chan string, maxTasks)
 
 	var wg sync.WaitGroup
-	for i := 0; i < *numWorkers; i++ {
+	for range *numWorkers {
 		wg.Add(1)
 		go worker(scanner, *tasksPerThread, ips, &wg)
 	}
 
-	var seg_a, seg_b, seg_c, seg_d uint8
+	var segA, segB, segC, segD uint8
 
 	if *ip != "" {
 		fmt.Printf("Starting from IP '%s'\n", *ip)
-		err := parseIP(*ip, &seg_a, &seg_b, &seg_c, &seg_d)
+		err := parseIP(*ip, &segA, &segB, &segC, &segD)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -85,31 +89,30 @@ func main() {
 			fmt.Println("Received signal, shutting down...")
 			close(ips)
 			wg.Wait()
-			fmt.Printf("Last IP: %d.%d.%d.%d\n", seg_a, seg_b, seg_c, seg_d)
+			fmt.Printf("Last IP: %d.%d.%d.%d\n", segA, segB, segC, segD)
 			fmt.Printf("Done.\n")
 			return
 
 		default:
-			if isReserved(&seg_a, &seg_b, &seg_c) {
-				fmt.Println("Reserved range reached, skipping to next available range")
+			ip := fmt.Sprintf("%d.%d.%d.%d", segA, segB, segC, segD)
+
+			if isReserved(&segA, &segB, &segC) {
+				log.Log().Str("ip", ip).Msg("Reserved range reached, skipping to next available range")
 			}
 
-			ips <- fmt.Sprintf("%d.%d.%d.%d", seg_a, seg_b, seg_c, seg_d)
+			ips <- ip
 
-			seg_d++
-			if seg_d == 0 {
-				seg_d = 0
-				seg_c++
+			segD++
+			if segD == 0 {
+				segC++
 
-				if seg_c == 0 {
-					seg_c = 0
-					seg_b++
+				if segC == 0 {
+					segB++
 
-					if seg_b == 0 {
-						seg_b = 0
-						seg_a++
+					if segB == 0 {
+						segA++
 
-						if seg_a >= 224 {
+						if segA >= 224 {
 							signals <- syscall.SIGTERM
 							return
 						}
@@ -125,14 +128,14 @@ func worker(scanner Scanner, tasksPerThread int, ips <-chan string, wg *sync.Wai
 
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://localhost:27017"))
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error connecting to database: %s\n", err)
 		return
 	}
 
 	defer func() {
 		err := client.Disconnect(context.TODO())
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Error disconnecting from database: %s\n", err)
 		}
 	}()
 
@@ -157,7 +160,6 @@ func worker(scanner Scanner, tasksPerThread int, ips <-chan string, wg *sync.Wai
 			conn, err := dialer.Dial(network, address)
 			if err != nil {
 				if errors.Is(err, os.ErrDeadlineExceeded) {
-					fmt.Printf("TIMEOUT %s\n", ip)
 					return
 				}
 
@@ -169,9 +171,10 @@ func worker(scanner Scanner, tasksPerThread int, ips <-chan string, wg *sync.Wai
 			// Read and Write deadline
 			err = conn.SetDeadline(time.Now().Add(3 * time.Second))
 			if err != nil {
-				fmt.Printf("TIMEOUT %s\n", ip)
 				return
 			}
+
+			log.Log().Str("ip", ip).Msg("CONNECTED")
 
 			response, latency, err := scanner.Scan(ip, conn)
 			if len(response) == 0 && err == nil {
@@ -185,17 +188,17 @@ func worker(scanner Scanner, tasksPerThread int, ips <-chan string, wg *sync.Wai
 					return
 				}
 
-				fmt.Printf("ERROR %s | %s\n", ip, err)
+				log.Log().Str("ip", ip).Err(err).Msg("SCAN")
 				return
 			}
 
 			err = scanner.Save(ip, latency, response, collection)
 			if err != nil {
-				fmt.Printf("ERROR %s | error inserting to document: %s\n", ip, err)
+				log.Log().Str("ip", ip).Err(err).Msg("SAVE")
 				return
 			}
 
-			fmt.Printf("SUCCESS %s\n", ip)
+			log.Log().Str("ip", ip).Msg("SAVED")
 		}(ip)
 	}
 }
