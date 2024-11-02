@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -82,6 +83,17 @@ func main() {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
+	counter := uint64(0)
+	secondTicker := time.NewTicker(1 * time.Second)
+
+	go func() {
+		for range secondTicker.C {
+			ipsPerSecond := atomic.LoadUint64(&counter)
+			log.Log().Uint64("ips", ipsPerSecond).Msg("IPs per second")
+			atomic.StoreUint64(&counter, 0)
+		}
+	}()
+
 	// Main loop
 	for {
 		select {
@@ -101,6 +113,7 @@ func main() {
 			}
 
 			ips <- ip
+			atomic.AddUint64(&counter, 1)
 
 			segD++
 			if segD == 0 {
@@ -173,8 +186,6 @@ func worker(scanner Scanner, tasksPerThread int, ips <-chan string, wg *sync.Wai
 			if err != nil {
 				return
 			}
-
-			log.Log().Str("ip", ip).Msg("CONNECTED")
 
 			response, latency, err := scanner.Scan(ip, conn)
 			if len(response) == 0 && err == nil {

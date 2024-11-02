@@ -49,8 +49,10 @@ go install github.com/Kyagara/hagelslag-go@latest
 
 - The amount of workers/tasks running might not be good, find a better default based on some values.
 
-- Add more checks for response size, also make a better read function for HTTP, currently it reads until EOF, maybe add a limit.
+- Add a maximum read size to http scanner, currently it reads until EOF.
 
 - Maybe add bedrocks servers to the Minecraft scanner.
+
+- I think logging can be better.
 
 - Remove this weird virus that keeps adding Frieren in the code.
