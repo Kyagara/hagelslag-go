@@ -100,10 +100,14 @@ func (h Hagelslag) worker(ips <-chan string, wg *sync.WaitGroup) {
 	port := h.Scanner.Port()
 	network := h.Scanner.Network()
 
-	dialer := net.Dialer{Timeout: 1 * time.Second}
+	dialer := net.Dialer{
+		KeepAlive: -1,
+		Timeout:   1 * time.Second,
+	}
+
 	collection := client.Database("hagelslag").Collection(name)
 
-	// Responsible for controlling how many tasks can be processed
+	// Responsible for controlling how many tasks can be processed by a worker
 	semaphore := make(chan struct{}, h.TasksPerThread)
 
 	for ip := range ips {
