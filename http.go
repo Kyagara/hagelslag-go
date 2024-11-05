@@ -14,25 +14,26 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type HTTPScanner struct{}
+type HTTP struct{}
 
-func (s HTTPScanner) Name() string {
+func (s HTTP) Name() string {
 	return "http"
 }
 
-func (s HTTPScanner) Network() string {
+func (s HTTP) Network() string {
 	return "tcp"
 }
 
-func (s HTTPScanner) Port() string {
+func (s HTTP) Port() string {
 	return "80"
 }
 
-func (s HTTPScanner) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
+func (s HTTP) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 	request := []string{"GET / HTTP/1.1\r\nHost: ", ip, "\r\nConnection: close\r\n\r\n"}
+	get := strings.Join(request, "")
 
 	start := time.Now()
-	_, err := conn.Write([]byte(strings.Join(request, "")))
+	_, err := conn.Write(unsafe.Slice(unsafe.StringData(get), len(get)))
 	if err != nil {
 		return nil, 0, fmt.Errorf("sending GET request: %w", err)
 	}
@@ -59,7 +60,7 @@ func (s HTTPScanner) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 	return response, latency, nil
 }
 
-func (s HTTPScanner) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
+func (s HTTP) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
 	document := bson.D{
 		{Key: "_id", Value: ip},
 		{Key: "latency", Value: latency},

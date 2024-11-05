@@ -7,42 +7,45 @@ import (
 )
 
 // Parse an IP string into its segments.
-func parseIP(ip string, segA *uint8, segB *uint8, segC *uint8, segD *uint8) error {
+func parseIP(ip string) (int, int, int, int, error) {
+	var segA, segB, segC, segD int
+
+	if ip == "" {
+		return 0, 0, 0, 0, nil
+	}
+
 	octets := strings.Split(ip, ".")
 	if len(octets) != 4 {
-		return fmt.Errorf("invalid IP address '%s'", ip)
+		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s'", ip)
 	}
 
-	newSegA, err := strconv.ParseUint(octets[0], 10, 8)
+	segA, err := strconv.Atoi(octets[0])
 	if err != nil {
-		return fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
 	}
 
-	newSegB, err := strconv.ParseUint(octets[1], 10, 8)
+	segB, err = strconv.Atoi(octets[1])
 	if err != nil {
-		return fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
 	}
 
-	newSegC, err := strconv.ParseUint(octets[2], 10, 8)
+	segC, err = strconv.Atoi(octets[2])
 	if err != nil {
-		return fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
 	}
 
-	newSegD, err := strconv.ParseUint(octets[3], 10, 8)
+	segD, err = strconv.Atoi(octets[3])
 	if err != nil {
-		return fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
 	}
 
-	*segA = uint8(newSegA)
-	*segB = uint8(newSegB)
-	*segC = uint8(newSegC)
-	*segD = uint8(newSegD)
+	fmt.Printf("Starting from IP '%s'\n", ip)
 
-	return nil
+	return segA, segB, segC, segD, nil
 }
 
 // Check if the IP is in any reserved range, skips to the next available range if it is.
-func isReserved(segA *uint8, segB *uint8, segC *uint8) bool {
+func isReserved(segA *int, segB *int, segC *int) bool {
 	// 10.x.x.x
 	// 127.x.x.x
 	if *segA == 10 || *segA == 127 {

@@ -12,21 +12,21 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type MinecraftScanner struct{}
+type Minecraft struct{}
 
-func (s MinecraftScanner) Name() string {
+func (s Minecraft) Name() string {
 	return "minecraft"
 }
 
-func (s MinecraftScanner) Network() string {
+func (s Minecraft) Network() string {
 	return "tcp"
 }
 
-func (s MinecraftScanner) Port() string {
+func (s Minecraft) Port() string {
 	return "25565"
 }
 
-func (s MinecraftScanner) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
+func (s Minecraft) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 	// Handshake
 	hostLen := len(ip)
 	packetLen := 7 + hostLen
@@ -102,7 +102,7 @@ func (s MinecraftScanner) Scan(ip string, conn net.Conn) ([]byte, int64, error) 
 	return json, latency, nil
 }
 
-func (s MinecraftScanner) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
+func (s Minecraft) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
 	var result bson.D
 	err := bson.UnmarshalExtJSON(data, true, &result)
 	if err != nil {
@@ -126,7 +126,7 @@ func (s MinecraftScanner) Save(ip string, latency int64, data []byte, collection
 	return nil
 }
 
-func (s MinecraftScanner) readByte(r io.Reader) (byte, error) {
+func (s Minecraft) readByte(r io.Reader) (byte, error) {
 	b := []byte{0xff}
 
 	_, err := io.ReadFull(r, b)
@@ -137,7 +137,7 @@ func (s MinecraftScanner) readByte(r io.Reader) (byte, error) {
 	return b[0], nil
 }
 
-func (s MinecraftScanner) readVarInt(r io.Reader) (int, error) {
+func (s Minecraft) readVarInt(r io.Reader) (int, error) {
 	var result int
 	var position uint
 

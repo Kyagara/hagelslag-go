@@ -11,21 +11,21 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type VelorenScanner struct{}
+type Veloren struct{}
 
-func (s VelorenScanner) Name() string {
+func (s Veloren) Name() string {
 	return "veloren"
 }
 
-func (s VelorenScanner) Network() string {
+func (s Veloren) Network() string {
 	return "udp"
 }
 
-func (s VelorenScanner) Port() string {
+func (s Veloren) Port() string {
 	return "14006"
 }
 
-func (s VelorenScanner) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
+func (s Veloren) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 	request := make([]byte, 263)
 	request[13] = 1
 	header := []byte{'v', 'e', 'l', 'o', 'r', 'e', 'n'}
@@ -75,7 +75,7 @@ func (s VelorenScanner) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 	return response, latency, nil
 }
 
-func (s VelorenScanner) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
+func (s Veloren) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
 	type serverInfo struct {
 		Hash       uint32
 		Timestamp  uint64
