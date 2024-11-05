@@ -61,10 +61,10 @@ func (s HTTP) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 }
 
 func (s HTTP) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
-	document := bson.D{
-		{Key: "_id", Value: ip},
-		{Key: "latency", Value: latency},
-		{Key: "data", Value: *(*string)(unsafe.Pointer(&data))},
+	document := bson.M{
+		"_id":     ip,
+		"latency": latency,
+		"data":    *(*string)(unsafe.Pointer(&data)),
 	}
 
 	filter := bson.M{"_id": ip}

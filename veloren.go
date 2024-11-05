@@ -92,10 +92,10 @@ func (s Veloren) Save(ip string, latency int64, data []byte, collection *mongo.C
 		BattleMode: data[24],
 	}
 
-	document := bson.D{
-		{Key: "_id", Value: ip},
-		{Key: "latency", Value: latency},
-		{Key: "data", Value: info},
+	document := bson.M{
+		"_id":     ip,
+		"latency": latency,
+		"data":    info,
 	}
 
 	filter := bson.M{"_id": ip}

@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 var (
@@ -23,6 +24,8 @@ var (
 )
 
 type Hagelslag struct {
+	// Scanner being used (default: http)
+	Scanner Scanner
 	// IP address to start scanning from
 	StartingIP string
 	// Number of workers to use (default: number of threads)
@@ -31,8 +34,6 @@ type Hagelslag struct {
 	MaxTasks int
 	// Tasks per thread (default: 512)
 	TasksPerThread int
-	// Scanner being used (default: http)
-	Scanner Scanner
 }
 
 type Scanner interface {
@@ -81,7 +82,9 @@ func NewHagelslag() (Hagelslag, error) {
 func (h Hagelslag) worker(ips <-chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	options := options.Client().ApplyURI("mongodb://localhost:27017")
+	options := options.Client().
+		ApplyURI("mongodb://localhost:27017").
+		SetWriteConcern(&writeconcern.WriteConcern{})
 
 	client, err := mongo.Connect(context.TODO(), options)
 	if err != nil {
