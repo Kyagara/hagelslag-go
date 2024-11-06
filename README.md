@@ -46,7 +46,7 @@ go install github.com/Kyagara/hagelslag-go@latest
 
 ## TODO/Ideas
 
-- Convert the logging to a tui, maybe with some prompts ('e' to print the errors), so it's easier to read.
+- Improve logging.
 
 - At high rates, DB connection errors out.
 
@@ -55,7 +55,5 @@ go install github.com/Kyagara/hagelslag-go@latest
 - Add a maximum read size to http scanner, currently it reads until EOF.
 
 - Maybe add bedrocks servers to the Minecraft scanner.
-
-- I think logging can be better.
 
 - Remove this weird virus that keeps adding Frieren in the code.

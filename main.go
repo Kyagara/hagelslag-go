@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,17 +13,44 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+var (
+	// IP/s
+	ipRate = int64(0)
+	// Amount of times the scanner connect (if OnlyConnect is true) or saved to the database successfully
+	successCount = int64(0)
 )
 
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	hagelslag, err := NewHagelslag()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Error initializing hagelslag: %s\n", err)
+		os.Exit(1)
 	}
 
+	err = testDBConnection(hagelslag.URI)
+	if err != nil {
+		fmt.Printf("Error connecting to database: %s\n", err)
+		os.Exit(1)
+	}
+
+	segA, segB, segC, segD, err := parseIP(hagelslag.StartingIP)
+	if err != nil {
+		fmt.Printf("Error parsing starting IP: %s\n", err)
+		os.Exit(1)
+	}
+
+	ticker := time.NewTicker(1 * time.Second)
+
 	ips := make(chan string, hagelslag.MaxTasks)
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 	var wg sync.WaitGroup
 	for range hagelslag.NumWorkers {
@@ -30,23 +58,18 @@ func main() {
 		go hagelslag.worker(ips, &wg)
 	}
 
-	segA, segB, segC, segD, err := parseIP(hagelslag.StartingIP)
-	if err != nil {
-		panic(err)
-	}
-
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-
-	counter := int64(0)
-
-	go getIPPerSecond(&counter)
-
 	// Main loop
 	for {
 		select {
+		case <-ticker.C:
+			ipsPerSecond := atomic.LoadInt64(&ipRate)
+			success := atomic.LoadInt64(&successCount)
+			fmt.Printf("\r\033[KSuccess: %d | IP/s: %d", success, ipsPerSecond)
+			atomic.StoreInt64(&ipRate, 0)
+
 		case <-signals:
-			fmt.Println("Received signal, shutting down...")
+			fmt.Println()
+			fmt.Println("Shutting down...")
 			close(ips)
 			wg.Wait()
 			fmt.Printf("Last IP: %d.%d.%d.%d\n", segA, segB, segC, segD)
@@ -57,11 +80,12 @@ func main() {
 			ip := strconv.Itoa(segA) + "." + strconv.Itoa(segB) + "." + strconv.Itoa(segC) + "." + strconv.Itoa(segD)
 
 			if isReserved(&segA, &segB, &segC) {
-				log.Log().Str("ip", ip).Msg("Reserved range reached, skipping to next available range")
+				fmt.Println()
+				log.Info().Str("ip", ip).Msg("Reserved range reached, skipping to next available range")
 			}
 
 			ips <- ip
-			atomic.AddInt64(&counter, 1)
+			atomic.AddInt64(&ipRate, 1)
 
 			segD++
 			if segD >= 256 {
@@ -87,14 +111,24 @@ func main() {
 	}
 }
 
-func getIPPerSecond(counter *int64) {
-	secondTicker := time.NewTicker(1 * time.Second)
-
-	for range secondTicker.C {
-		ipsPerSecond := atomic.LoadInt64(counter)
-		log.Log().Int64("ips", ipsPerSecond).Msg("IPs per second")
-		atomic.StoreInt64(counter, 0)
+// For checking earlier if the database is reachable
+func testDBConnection(uri string) error {
+	client, err := mongo.Connect(context.TODO(), options.Client().SetServerSelectionTimeout(3*time.Second).ApplyURI(uri))
+	if err != nil {
+		return err
 	}
+
+	err = client.Ping(context.TODO(), nil)
+	if err != nil {
+		return err
+	}
+
+	err = client.Disconnect(context.TODO())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ************#*#******####*########***#####################%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%@@@@%%%@@@@@@@@@@@@@@@@@@@

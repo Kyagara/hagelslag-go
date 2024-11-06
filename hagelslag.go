@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -131,6 +133,7 @@ func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, netw
 	address := net.JoinHostPort(ip, port)
 	conn, err := dialer.Dial(network, address)
 	if err != nil {
+		// Don't log timeouts
 		if errors.Is(err, os.ErrDeadlineExceeded) {
 			return
 		}
@@ -141,6 +144,7 @@ func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, netw
 	defer conn.Close()
 
 	if h.OnlyConnect {
+		atomic.AddInt64(&successCount, 1)
 		return
 	}
 
@@ -157,20 +161,22 @@ func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, netw
 	}
 
 	if err != nil {
-		// Don't log EOF and connection reset errors
-		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+		// Don't log timeouts, connection reset errors or  EOF
+		if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, io.EOF) {
 			return
 		}
 
-		log.Log().Str("ip", ip).Err(err).Msg("SCAN")
+		fmt.Println()
+		log.Error().Str("ip", ip).Err(err).Msg("SCAN")
 		return
 	}
 
 	err = h.Scanner.Save(ip, latency, response, collection)
 	if err != nil {
-		log.Log().Str("ip", ip).Err(err).Msg("SAVE")
+		fmt.Println()
+		log.Error().Str("ip", ip).Err(err).Msg("SAVE")
 		return
 	}
 
-	log.Log().Str("ip", ip).Msg("SAVED")
+	atomic.AddInt64(&successCount, 1)
 }

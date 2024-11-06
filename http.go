@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -35,14 +34,14 @@ func (s HTTP) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 	start := time.Now()
 	_, err := conn.Write(unsafe.Slice(unsafe.StringData(get), len(get)))
 	if err != nil {
-		return nil, 0, fmt.Errorf("sending GET request: %w", err)
+		return nil, 0, err
 	}
 
 	response := make([]byte, 17)
 
 	_, err = io.ReadFull(conn, response)
 	if err != nil {
-		return nil, 0, fmt.Errorf("reading status from GET response: %w", err)
+		return nil, 0, err
 	}
 
 	latency := time.Since(start).Milliseconds()
@@ -54,7 +53,7 @@ func (s HTTP) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 
 	response, err = io.ReadAll(conn)
 	if err != nil {
-		return nil, 0, fmt.Errorf("reading GET response: %w", err)
+		return nil, 0, err
 	}
 
 	return response, latency, nil
