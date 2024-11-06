@@ -24,15 +24,12 @@ var (
 )
 
 type Hagelslag struct {
-	// Scanner being used (default: http)
-	Scanner Scanner
-	// IP address to start scanning from
-	StartingIP string
-	// Number of workers to use (default: number of threads)
-	NumWorkers int
-	// Maximum number of tasks that the main channel can hold (tasks-per-thread * 2 * workers)
-	MaxTasks int
-	// Tasks per thread (default: 512)
+	Scanner        Scanner
+	StartingIP     string
+	URI            string
+	OnlyConnect    bool
+	NumWorkers     int
+	MaxTasks       int
 	TasksPerThread int
 }
 
@@ -52,12 +49,16 @@ type Scanner interface {
 func NewHagelslag() (Hagelslag, error) {
 	ip := flag.String("ip", "", "IP address to start from")
 	scannerName := flag.String("scanner", "http", "Scanner to use (default: http)")
+	uri := flag.String("uri", "mongodb://localhost:27017", "MongoDB URI (default: mongodb://localhost:27017)")
+	onlyConnect := flag.Bool("only-connect", false, "Only connect to IPs, skipping scan/save (default: false)")
 	numWorkers := flag.Int("workers", runtime.NumCPU(), "Number of workers to use (default: number of threads)")
 	tasksPerThread := flag.Int("tasks-per-thread", 512, "Tasks per thread (default: 512)")
 	flag.Parse()
 
 	h := Hagelslag{
 		StartingIP:     *ip,
+		URI:            *uri,
+		OnlyConnect:    *onlyConnect,
 		NumWorkers:     *numWorkers,
 		MaxTasks:       *tasksPerThread * 2 * *numWorkers,
 		TasksPerThread: *tasksPerThread,
@@ -83,7 +84,7 @@ func (h Hagelslag) worker(ips <-chan string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	options := options.Client().
-		ApplyURI("mongodb://localhost:27017").
+		ApplyURI(h.URI).
 		SetWriteConcern(&writeconcern.WriteConcern{})
 
 	client, err := mongo.Connect(context.TODO(), options)
@@ -138,6 +139,10 @@ func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, netw
 		return
 	}
 	defer conn.Close()
+
+	if h.OnlyConnect {
+		return
+	}
 
 	// Read and Write deadline
 	err = conn.SetDeadline(time.Now().Add(3 * time.Second))

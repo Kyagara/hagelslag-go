@@ -28,13 +28,12 @@ Each worker (defaults to number of cpu threads), will retrieve an amount of ips 
 
 Data will be inserted in the mongodb `hagelslag` database inside the `<scanner>` collection and will follow the structure:
 
+> `data` field can be a string (for html response) or a json object.
+
 ```json
 {
-    // ip address
     "_id": "<ip>",
-    // time in milliseconds
     "latency": 0,
-    // data can be a string or json
     "data": ""
 }
 ```
@@ -45,7 +44,11 @@ Data will be inserted in the mongodb `hagelslag` database inside the `<scanner>`
 go install github.com/Kyagara/hagelslag-go@latest
 ```
 
-## Ideas
+## TODO/Ideas
+
+- Convert the logging to a tui, maybe with some prompts ('e' to print the errors), so it's easier to read.
+
+- At high rates, DB connection errors out.
 
 - The amount of workers/tasks running might not be good, find a better default based on some values.
 

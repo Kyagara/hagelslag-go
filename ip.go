@@ -46,9 +46,10 @@ func parseIP(ip string) (int, int, int, int, error) {
 
 // Check if the IP is in any reserved range, skips to the next available range if it is.
 func isReserved(segA *int, segB *int, segC *int) bool {
+	// 0.x.x.x
 	// 10.x.x.x
 	// 127.x.x.x
-	if *segA == 10 || *segA == 127 {
+	if *segA == 0 || *segA == 10 || *segA == 127 {
 		*segA++
 		return true
 	}
