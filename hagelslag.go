@@ -164,7 +164,7 @@ func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string
 			return
 		}
 
-		os.Stderr.WriteString("\nERROR SCAN " + address + ": " + err.Error())
+		os.Stderr.WriteString("\nERROR SCAN " + address + ": " + err.Error() + "\n")
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string
 			return
 		}
 
-		os.Stderr.WriteString("\nERROR SAVE " + address + ": " + err.Error())
+		os.Stderr.WriteString("\nERROR SAVE " + address + ": " + err.Error() + "\n")
 		return
 	}
 
