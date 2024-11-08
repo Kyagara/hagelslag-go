@@ -11,7 +11,7 @@ func parseIP(ip string) (int, int, int, int, error) {
 	var segA, segB, segC, segD int
 
 	if ip == "" {
-		return 0, 0, 0, 0, nil
+		return 1, 0, 0, 0, nil
 	}
 
 	octets := strings.Split(ip, ".")
@@ -21,35 +21,42 @@ func parseIP(ip string) (int, int, int, int, error) {
 
 	segA, err := strconv.Atoi(octets[0])
 	if err != nil {
-		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("atoi failed on '%s', %s", ip, err)
 	}
 
 	segB, err = strconv.Atoi(octets[1])
 	if err != nil {
-		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("atoi failed on '%s', %s", ip, err)
 	}
 
 	segC, err = strconv.Atoi(octets[2])
 	if err != nil {
-		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("atoi failed on '%s', %s", ip, err)
 	}
 
 	segD, err = strconv.Atoi(octets[3])
 	if err != nil {
-		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s', %s", ip, err)
+		return 0, 0, 0, 0, fmt.Errorf("atoi failed on '%s', %s", ip, err)
 	}
 
-	fmt.Printf("Starting from IP '%s'\n", ip)
+	if segA > 255 || segB > 255 || segC > 255 || segD > 255 {
+		return 0, 0, 0, 0, fmt.Errorf("invalid IP address '%s'", ip)
+	}
+
+	if isReserved(&segA, &segB, &segC) {
+		fmt.Println("IP is reserved, skipping to next available range")
+	}
+
+	fmt.Printf("Starting from IP '%d.%d.%d.%d'\n", segA, segB, segC, segD)
 
 	return segA, segB, segC, segD, nil
 }
 
 // Check if the IP is in any reserved range, skips to the next available range if it is.
 func isReserved(segA *int, segB *int, segC *int) bool {
-	// 0.x.x.x
 	// 10.x.x.x
 	// 127.x.x.x
-	if *segA == 0 || *segA == 10 || *segA == 127 {
+	if *segA == 10 || *segA == 127 {
 		*segA++
 		return true
 	}

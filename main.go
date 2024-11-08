@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -11,8 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -22,11 +21,12 @@ var (
 	ipRate = int64(0)
 	// Amount of times the scanner connect (if OnlyConnect is true) or saved to the database successfully
 	successCount = int64(0)
+
+	// For use when going to log an error when shutting down
+	shuttingDown = false
 )
 
 func main() {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	hagelslag, err := NewHagelslag()
 	if err != nil {
@@ -46,6 +46,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	writer := bufio.NewWriter(os.Stderr)
+	defer writer.Flush()
+
+	format := "\r\033[KSuccess: %d | Rate: %d | At: %d.%d.%d.%d"
+
 	ticker := time.NewTicker(1 * time.Second)
 
 	ips := make(chan string, hagelslag.MaxTasks)
@@ -64,24 +69,24 @@ func main() {
 		case <-ticker.C:
 			ipsPerSecond := atomic.LoadInt64(&ipRate)
 			success := atomic.LoadInt64(&successCount)
-			fmt.Printf("\r\033[KSuccess: %d | IP/s: %d", success, ipsPerSecond)
+			fmt.Fprintf(writer, format, success, ipsPerSecond, segA, segB, segC, segD)
+			writer.Flush()
 			atomic.StoreInt64(&ipRate, 0)
 
 		case <-signals:
-			fmt.Println()
-			fmt.Println("Shutting down...")
+			fmt.Printf("\nShutting down...\n")
+			shuttingDown = true
 			close(ips)
 			wg.Wait()
 			fmt.Printf("Last IP: %d.%d.%d.%d\n", segA, segB, segC, segD)
-			fmt.Printf("Done.\n")
+			fmt.Println("Done.")
 			return
 
 		default:
 			ip := strconv.Itoa(segA) + "." + strconv.Itoa(segB) + "." + strconv.Itoa(segC) + "." + strconv.Itoa(segD)
 
 			if isReserved(&segA, &segB, &segC) {
-				fmt.Println()
-				log.Info().Str("ip", ip).Msg("Reserved range reached, skipping to next available range")
+				os.Stderr.WriteString("\nReserved range reached, skipping to next available range.\nAt: " + ip)
 			}
 
 			ips <- ip

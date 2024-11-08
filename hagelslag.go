@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -166,15 +165,21 @@ func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, netw
 			return
 		}
 
-		fmt.Println()
-		log.Error().Str("ip", ip).Err(err).Msg("SCAN")
+		if shuttingDown {
+			return
+		}
+
+		os.Stderr.WriteString("\nERROR SCAN " + ip + ": " + err.Error())
 		return
 	}
 
 	err = h.Scanner.Save(ip, latency, response, collection)
 	if err != nil {
-		fmt.Println()
-		log.Error().Str("ip", ip).Err(err).Msg("SAVE")
+		if shuttingDown {
+			return
+		}
+
+		os.Stderr.WriteString("\nERROR SAVE " + ip + ": " + err.Error())
 		return
 	}
 
