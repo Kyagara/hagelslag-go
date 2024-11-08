@@ -48,9 +48,9 @@ go install github.com/Kyagara/hagelslag-go@latest
 
 - Improve logging.
 
-- At high rates, DB connection errors out.
+- Keep the port as the document ID?
 
-- The amount of workers/tasks running might not be good, find a better default based on some values.
+- At high rates, DB connection errors out.
 
 - Add a maximum read size to http scanner, currently it reads until EOF.
 

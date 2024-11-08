@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,13 +24,11 @@ var (
 )
 
 type Hagelslag struct {
-	Scanner        Scanner
-	StartingIP     string
-	URI            string
-	OnlyConnect    bool
-	NumWorkers     int
-	MaxTasks       int
-	TasksPerThread int
+	Scanner     Scanner
+	StartingIP  string
+	URI         string
+	OnlyConnect bool
+	Rate        int
 }
 
 type Scanner interface {
@@ -52,17 +49,14 @@ func NewHagelslag() (Hagelslag, error) {
 	scannerName := flag.String("scanner", "http", "Scanner to use (default: http)")
 	uri := flag.String("uri", "mongodb://localhost:27017", "MongoDB URI (default: mongodb://localhost:27017)")
 	onlyConnect := flag.Bool("only-connect", false, "Only connect to IPs, skipping scan/save (default: false)")
-	numWorkers := flag.Int("workers", runtime.NumCPU(), "Number of workers to use (default: number of threads)")
-	tasksPerThread := flag.Int("tasks-per-thread", 512, "Tasks per thread (default: 512)")
+	rate := flag.Int("rate", 1000, "Limit of connections (default: 1000)")
 	flag.Parse()
 
 	h := Hagelslag{
-		StartingIP:     *ip,
-		URI:            *uri,
-		OnlyConnect:    *onlyConnect,
-		NumWorkers:     *numWorkers,
-		MaxTasks:       *tasksPerThread * 2 * *numWorkers,
-		TasksPerThread: *tasksPerThread,
+		StartingIP:  *ip,
+		URI:         *uri,
+		OnlyConnect: *onlyConnect,
+		Rate:        *rate,
 	}
 
 	scanner := strings.ToLower(*scannerName)
@@ -81,7 +75,7 @@ func NewHagelslag() (Hagelslag, error) {
 	return h, nil
 }
 
-func (h Hagelslag) worker(ips <-chan string, wg *sync.WaitGroup) {
+func (h Hagelslag) worker(addresses chan string, semaphore chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	options := options.Client().
@@ -99,7 +93,6 @@ func (h Hagelslag) worker(ips <-chan string, wg *sync.WaitGroup) {
 	}
 
 	name := h.Scanner.Name()
-	port := h.Scanner.Port()
 	network := h.Scanner.Network()
 
 	dialer := net.Dialer{
@@ -109,13 +102,8 @@ func (h Hagelslag) worker(ips <-chan string, wg *sync.WaitGroup) {
 
 	collection := client.Database("hagelslag").Collection(name)
 
-	// Responsible for controlling how many tasks can be processed by a worker
-	semaphore := make(chan struct{}, h.TasksPerThread)
-
-	for ip := range ips {
-		// Get a slot to work on a task
-		semaphore <- struct{}{}
-		go h.spawn(semaphore, ip, port, network, dialer, collection)
+	for address := range addresses {
+		go h.spawn(semaphore, address, network, dialer, collection)
 	}
 
 	err = client.Disconnect(context.TODO())
@@ -124,12 +112,11 @@ func (h Hagelslag) worker(ips <-chan string, wg *sync.WaitGroup) {
 	}
 }
 
-func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, network string, dialer net.Dialer, collection *mongo.Collection) {
+func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string, dialer net.Dialer, collection *mongo.Collection) {
 	// Release the slot when done
 	defer func() { <-semaphore }()
 
 	// Connect
-	address := net.JoinHostPort(ip, port)
 	conn, err := dialer.Dial(network, address)
 	if err != nil {
 		// Don't log timeouts
@@ -153,7 +140,7 @@ func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, netw
 		return
 	}
 
-	response, latency, err := h.Scanner.Scan(ip, conn)
+	response, latency, err := h.Scanner.Scan(address, conn)
 	if len(response) == 0 && err == nil {
 		// No response, or wrong response (not wanted, can be discarded)
 		return
@@ -169,17 +156,17 @@ func (h Hagelslag) spawn(semaphore <-chan struct{}, ip string, port string, netw
 			return
 		}
 
-		os.Stderr.WriteString("\nERROR SCAN " + ip + ": " + err.Error())
+		os.Stderr.WriteString("\nERROR SCAN " + address + ": " + err.Error())
 		return
 	}
 
-	err = h.Scanner.Save(ip, latency, response, collection)
+	err = h.Scanner.Save(address, latency, response, collection)
 	if err != nil {
 		if shuttingDown {
 			return
 		}
 
-		os.Stderr.WriteString("\nERROR SAVE " + ip + ": " + err.Error())
+		os.Stderr.WriteString("\nERROR SAVE " + address + ": " + err.Error())
 		return
 	}
 

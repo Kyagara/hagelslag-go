@@ -9,7 +9,8 @@ func BenchmarkIPToString(b *testing.B) {
 
 	for s := 0; s < b.N; s++ {
 		i := uint32(0)
-		g := 10000000
+		port := uint16(25565)
+		g := 1000000
 
 		for {
 			if g == 0 {
@@ -17,7 +18,7 @@ func BenchmarkIPToString(b *testing.B) {
 			}
 			g--
 
-			ip := ipFromUint32(i)
+			ip := ipFromUint32(i, port)
 			if ip == "" {
 				b.Fail()
 			}

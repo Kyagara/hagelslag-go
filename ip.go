@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-func ipFromUint32(address uint32) string {
-	var ip [15]byte
+func ipFromUint32(address uint32, port uint16) string {
+	var ip [21]byte
 	i := 0
 
 	// Helper function to write a 3-digit segment into the buffer
@@ -41,6 +41,38 @@ func ipFromUint32(address uint32) string {
 	i++
 
 	appendSegment(byte(address))
+
+	ip[i] = ':'
+	i++
+
+	start := i
+	if port >= 10000 {
+		ip[i] = '0' + byte(port/10000)
+		i++
+		port %= 10000
+	}
+
+	if port >= 1000 || i > start {
+		ip[i] = '0' + byte(port/1000)
+		i++
+		port %= 1000
+	}
+
+	if port >= 100 || i > start {
+		ip[i] = '0' + byte(port/100)
+		i++
+		port %= 100
+	}
+
+	if port >= 10 || i > start {
+		ip[i] = '0' + byte(port/10)
+		i++
+		port %= 10
+	}
+
+	ip[i] = '0' + byte(port)
+	i++
+
 	return string(ip[:i])
 }
 
@@ -74,8 +106,8 @@ func parseIP(ip string) (uint32, error) {
 		return 0, fmt.Errorf("invalid segment '%s' in IP '%s'", octets[3], ip)
 	}
 
-	address := (uint32(segA) << 24) | (uint32(segB) << 16) | (uint32(segC) << 8) | uint32(segD)
-	return address, nil
+	parsed := (uint32(segA) << 24) | (uint32(segB) << 16) | (uint32(segC) << 8) | uint32(segD)
+	return parsed, nil
 }
 
 // Check if the IP is in any reserved range, skips to the next available range if it is.

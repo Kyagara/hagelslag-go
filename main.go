@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -36,71 +39,81 @@ func main() {
 		os.Exit(1)
 	}
 
-	address, err := parseIP(hagelslag.StartingIP)
+	format := "\r\033[KRate: %d | Success: %d | At: %s"
+
+	writer := bufio.NewWriter(os.Stderr)
+	defer writer.Flush()
+
+	// Channel that will print status every second
+	status := time.NewTicker(1 * time.Second).C
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+	semaphore := make(chan struct{}, hagelslag.Rate)
+	addresses := make(chan string)
+
+	var wg sync.WaitGroup
+	for range runtime.NumCPU() {
+		wg.Add(1)
+		go hagelslag.worker(addresses, semaphore, &wg)
+	}
+
+	ip, err := parseIP(hagelslag.StartingIP)
 	if err != nil {
 		fmt.Printf("Error parsing starting IP: %s\n", err)
 		os.Exit(1)
 	}
 
-	writer := bufio.NewWriter(os.Stderr)
-	defer writer.Flush()
-
-	// IP/s
-	ipRate := int64(0)
-
-	format := "\r\033[KSuccess: %d | Rate: %d | At: %s"
-
-	ticker := time.NewTicker(1 * time.Second)
-
-	ips := make(chan string, hagelslag.MaxTasks)
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-
-	var wg sync.WaitGroup
-	for range hagelslag.NumWorkers {
-		wg.Add(1)
-		go hagelslag.worker(ips, &wg)
+	portInt, err := strconv.Atoi(hagelslag.Scanner.Port())
+	if err != nil {
+		fmt.Printf("Error parsing port: %s\n", err)
+		os.Exit(1)
 	}
+
+	port := uint16(portInt)
 
 	// Main loop
 	for {
 		select {
-		case <-ticker.C:
-			ipsPerSecond := atomic.LoadInt64(&ipRate)
+		case <-status:
 			success := atomic.LoadInt64(&successCount)
-			fmt.Fprintf(writer, format, success, ipsPerSecond, ipFromUint32(address))
+			fmt.Fprintf(writer, format, hagelslag.Rate, success, ipFromUint32(ip, port))
 			writer.Flush()
-			atomic.StoreInt64(&ipRate, 0)
 
 		case <-signals:
 			fmt.Printf("\nShutting down...\n")
 			shuttingDown = true
-			close(ips)
+			close(addresses)
 			wg.Wait()
-			ip := ipFromUint32(address)
-			if ip == "255.0.0.0" {
+			address := ipFromUint32(ip, port)
+			if strings.HasPrefix(address, "255.0.0.0") {
 				fmt.Println("Done.")
 			} else {
-				fmt.Printf("Last IP: %s\n", ip)
+				fmt.Printf("Last IP: %s\n", address)
 			}
+
 			return
 
 		default:
-			if address >= 0xFF000000 {
+			if ip >= 0xFF000000 {
 				signals <- syscall.SIGTERM
 				continue
 			}
 
-			ip := ipFromUint32(address)
-
-			if isReserved(&address) {
-				os.Stderr.WriteString("\nReserved range reached, skipping to next available range.\nAt: " + ip)
+			if isReserved(&ip) {
+				os.Stderr.WriteString("\nReserved range reached, skipping to next available range.\n")
 			}
 
-			ips <- ip
-			atomic.AddInt64(&ipRate, 1)
+			address := ipFromUint32(ip, port)
 
-			address++
+			// Get a slot to work on a task
+			semaphore <- struct{}{}
+
+			// Send the address to workers
+			addresses <- address
+
+			ip++
 		}
 	}
 }
