@@ -77,14 +77,18 @@ func main() {
 			shuttingDown = true
 			close(ips)
 			wg.Wait()
-			fmt.Printf("Last IP: %s\n", ipFromUint32(address))
-			fmt.Println("Done.")
+			ip := ipFromUint32(address)
+			if ip == "255.0.0.0" {
+				fmt.Println("Done.")
+			} else {
+				fmt.Printf("Last IP: %s\n", ip)
+			}
 			return
 
 		default:
 			if address >= 0xFF000000 {
 				signals <- syscall.SIGTERM
-				return
+				continue
 			}
 
 			ip := ipFromUint32(address)
