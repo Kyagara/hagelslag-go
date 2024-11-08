@@ -26,6 +26,7 @@ var (
 type Hagelslag struct {
 	Scanner     Scanner
 	StartingIP  string
+	Port        string
 	URI         string
 	OnlyConnect bool
 	Rate        int
@@ -47,6 +48,7 @@ type Scanner interface {
 func NewHagelslag() (Hagelslag, error) {
 	ip := flag.String("ip", "", "IP address to start from")
 	scannerName := flag.String("scanner", "http", "Scanner to use (default: http)")
+	port := flag.String("port", "", "Override the scanners port")
 	uri := flag.String("uri", "mongodb://localhost:27017", "MongoDB URI (default: mongodb://localhost:27017)")
 	onlyConnect := flag.Bool("only-connect", false, "Only connect to IPs, skipping scan/save (default: false)")
 	rate := flag.Int("rate", 1000, "Limit of connections (default: 1000)")
@@ -70,6 +72,12 @@ func NewHagelslag() (Hagelslag, error) {
 		h.Scanner = Veloren{}
 	default:
 		return Hagelslag{}, fmt.Errorf("unknown scanner '%s'", scanner)
+	}
+
+	if *port != "" {
+		h.Port = *port
+	} else {
+		h.Port = h.Scanner.Port()
 	}
 
 	return h, nil

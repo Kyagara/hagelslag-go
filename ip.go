@@ -6,76 +6,78 @@ import (
 	"strings"
 )
 
-func ipFromUint32(address uint32, port uint16) string {
-	var ip [21]byte
+// Converts an IP and port to a string
+func parseAddress(ip uint32, port uint16) string {
+	var address [21]byte
 	i := 0
 
 	// Helper function to write a 3-digit segment into the buffer
 	appendSegment := func(segment byte) {
 		if segment >= 100 {
-			ip[i] = '0' + segment/100
+			address[i] = '0' + segment/100
 			i++
 			segment %= 100
 		}
 
 		if segment >= 10 {
-			ip[i] = '0' + segment/10
+			address[i] = '0' + segment/10
 			i++
 			segment %= 10
 		}
 
-		ip[i] = '0' + segment
+		address[i] = '0' + segment
 		i++
 	}
 
-	appendSegment(byte(address >> 24))
-	ip[i] = '.'
+	appendSegment(byte(ip >> 24))
+	address[i] = '.'
 	i++
 
-	appendSegment(byte(address >> 16))
-	ip[i] = '.'
+	appendSegment(byte(ip >> 16))
+	address[i] = '.'
 	i++
 
-	appendSegment(byte(address >> 8))
-	ip[i] = '.'
+	appendSegment(byte(ip >> 8))
+	address[i] = '.'
 	i++
 
-	appendSegment(byte(address))
+	appendSegment(byte(ip))
 
-	ip[i] = ':'
+	address[i] = ':'
 	i++
 
 	start := i
 	if port >= 10000 {
-		ip[i] = '0' + byte(port/10000)
+		address[i] = '0' + byte(port/10000)
 		i++
 		port %= 10000
 	}
 
 	if port >= 1000 || i > start {
-		ip[i] = '0' + byte(port/1000)
+		address[i] = '0' + byte(port/1000)
 		i++
 		port %= 1000
 	}
 
 	if port >= 100 || i > start {
-		ip[i] = '0' + byte(port/100)
+		address[i] = '0' + byte(port/100)
 		i++
 		port %= 100
 	}
 
 	if port >= 10 || i > start {
-		ip[i] = '0' + byte(port/10)
+		address[i] = '0' + byte(port/10)
 		i++
 		port %= 10
 	}
 
-	ip[i] = '0' + byte(port)
+	address[i] = '0' + byte(port)
 	i++
 
-	return string(ip[:i])
+	return string(address[:i])
 }
 
+// Converts an IP (x.x.x.x) string to an uint32
 func parseIP(ip string) (uint32, error) {
 	if ip == "" {
 		return 1 << 24, nil

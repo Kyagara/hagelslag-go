@@ -18,7 +18,7 @@ func BenchmarkIPToString(b *testing.B) {
 			}
 			g--
 
-			ip := ipFromUint32(i, port)
+			ip := parseAddress(i, port)
 			if ip == "" {
 				b.Fail()
 			}

@@ -65,7 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	portInt, err := strconv.Atoi(hagelslag.Scanner.Port())
+	portInt, err := strconv.Atoi(hagelslag.Port)
 	if err != nil {
 		fmt.Printf("Error parsing port: %s\n", err)
 		os.Exit(1)
@@ -78,7 +78,7 @@ func main() {
 		select {
 		case <-status:
 			success := atomic.LoadInt64(&successCount)
-			fmt.Fprintf(writer, format, hagelslag.Rate, success, ipFromUint32(ip, port))
+			fmt.Fprintf(writer, format, hagelslag.Rate, success, parseAddress(ip, port))
 			writer.Flush()
 
 		case <-signals:
@@ -86,7 +86,7 @@ func main() {
 			shuttingDown = true
 			close(addresses)
 			wg.Wait()
-			address := ipFromUint32(ip, port)
+			address := parseAddress(ip, port)
 			if strings.HasPrefix(address, "255.0.0.0") {
 				fmt.Println("Done.")
 			} else {
@@ -105,7 +105,7 @@ func main() {
 				os.Stderr.WriteString("\nReserved range reached, skipping to next available range.\n")
 			}
 
-			address := ipFromUint32(ip, port)
+			address := parseAddress(ip, port)
 
 			// Get a slot to work on a task
 			semaphore <- struct{}{}
