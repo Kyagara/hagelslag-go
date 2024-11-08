@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -17,8 +16,6 @@ import (
 )
 
 var (
-	// IP/s
-	ipRate = int64(0)
 	// Amount of times the scanner connect (if OnlyConnect is true) or saved to the database successfully
 	successCount = int64(0)
 
@@ -27,7 +24,6 @@ var (
 )
 
 func main() {
-
 	hagelslag, err := NewHagelslag()
 	if err != nil {
 		fmt.Printf("Error initializing hagelslag: %s\n", err)
@@ -40,7 +36,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	segA, segB, segC, segD, err := parseIP(hagelslag.StartingIP)
+	address, err := parseIP(hagelslag.StartingIP)
 	if err != nil {
 		fmt.Printf("Error parsing starting IP: %s\n", err)
 		os.Exit(1)
@@ -49,7 +45,10 @@ func main() {
 	writer := bufio.NewWriter(os.Stderr)
 	defer writer.Flush()
 
-	format := "\r\033[KSuccess: %d | Rate: %d | At: %d.%d.%d.%d"
+	// IP/s
+	ipRate := int64(0)
+
+	format := "\r\033[KSuccess: %d | Rate: %d | At: %s"
 
 	ticker := time.NewTicker(1 * time.Second)
 
@@ -69,7 +68,7 @@ func main() {
 		case <-ticker.C:
 			ipsPerSecond := atomic.LoadInt64(&ipRate)
 			success := atomic.LoadInt64(&successCount)
-			fmt.Fprintf(writer, format, success, ipsPerSecond, segA, segB, segC, segD)
+			fmt.Fprintf(writer, format, success, ipsPerSecond, ipFromUint32(address))
 			writer.Flush()
 			atomic.StoreInt64(&ipRate, 0)
 
@@ -78,40 +77,26 @@ func main() {
 			shuttingDown = true
 			close(ips)
 			wg.Wait()
-			fmt.Printf("Last IP: %d.%d.%d.%d\n", segA, segB, segC, segD)
+			fmt.Printf("Last IP: %s\n", ipFromUint32(address))
 			fmt.Println("Done.")
 			return
 
 		default:
-			ip := strconv.Itoa(segA) + "." + strconv.Itoa(segB) + "." + strconv.Itoa(segC) + "." + strconv.Itoa(segD)
+			if address >= 0xFF000000 {
+				signals <- syscall.SIGTERM
+				return
+			}
 
-			if isReserved(&segA, &segB, &segC) {
+			ip := ipFromUint32(address)
+
+			if isReserved(&address) {
 				os.Stderr.WriteString("\nReserved range reached, skipping to next available range.\nAt: " + ip)
 			}
 
 			ips <- ip
 			atomic.AddInt64(&ipRate, 1)
 
-			segD++
-			if segD >= 256 {
-				segD = 0
-				segC++
-
-				if segC >= 256 {
-					segC = 0
-					segB++
-
-					if segB >= 256 {
-						segB = 0
-						segA++
-
-						if segA >= 224 {
-							signals <- syscall.SIGTERM
-							return
-						}
-					}
-				}
-			}
+			address++
 		}
 	}
 }

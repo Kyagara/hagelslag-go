@@ -1,2 +1,4 @@
 hagelslag
 hagelslag.exe
+*.test
+*.out
