@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -13,38 +12,33 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+)
 
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+const (
+	// Format used to print the current status of the program
+	STATUS_FORMAT = "\r\033[KRate: %d | Success: %d | At: %s"
+
+	// 15Mb
+	MAX_RESPONSE_LENGTH = 15 * 1024 * 1024
 )
 
 var (
 	// Amount of times the scanner connect (if OnlyConnect is true) or saved to the database successfully
-	successCount = int64(0)
-
-	// For use when going to log an error when shutting down
-	shuttingDown = false
+	SUCCESS = int64(0)
+	// For use when going to log an error but the program is shutting down
+	SHUTTING_DOWN = false
 )
 
 func main() {
 	hagelslag, err := NewHagelslag()
 	if err != nil {
-		fmt.Printf("Error initializing hagelslag: %s\n", err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
-
-	err = testDBConnection(hagelslag.URI)
-	if err != nil {
-		fmt.Printf("Error connecting to database: %s\n", err)
-		os.Exit(1)
-	}
-
-	format := "\r\033[KRate: %d | Success: %d | At: %s"
 
 	writer := bufio.NewWriter(os.Stderr)
 	defer writer.Flush()
 
-	// Channel that will print status every second
 	status := time.NewTicker(1 * time.Second).C
 
 	signals := make(chan os.Signal, 1)
@@ -59,33 +53,30 @@ func main() {
 		go hagelslag.worker(addresses, semaphore, &wg)
 	}
 
-	ip, err := parseIP(hagelslag.StartingIP)
+	ip, port, err := getStartingIPAndPort(hagelslag.StartingIP, hagelslag.Port)
 	if err != nil {
-		fmt.Printf("Error parsing starting IP: %s\n", err)
+		fmt.Println(err)
+		writer.Flush()
 		os.Exit(1)
 	}
-
-	portInt, err := strconv.Atoi(hagelslag.Port)
-	if err != nil {
-		fmt.Printf("Error parsing port: %s\n", err)
-		os.Exit(1)
-	}
-
-	port := uint16(portInt)
 
 	// Main loop
 	for {
 		select {
+		// Print status every second
 		case <-status:
-			success := atomic.LoadInt64(&successCount)
-			fmt.Fprintf(writer, format, hagelslag.Rate, success, parseAddress(ip, port))
+			success := atomic.LoadInt64(&SUCCESS)
+			fmt.Fprintf(writer, STATUS_FORMAT, hagelslag.Rate, success, parseAddress(ip, port))
 			writer.Flush()
 
+		// Handle SIGINT and SIGTERM signals
 		case <-signals:
 			fmt.Printf("\nShutting down...\n")
-			shuttingDown = true
+
+			SHUTTING_DOWN = true
 			close(addresses)
 			wg.Wait()
+
 			address := parseAddress(ip, port)
 			if strings.HasPrefix(address, "255.0.0.0") {
 				fmt.Println("Done.")
@@ -95,6 +86,7 @@ func main() {
 
 			return
 
+		// Increment the IP
 		default:
 			if ip >= 0xFF000000 {
 				signals <- syscall.SIGTERM
@@ -118,24 +110,20 @@ func main() {
 	}
 }
 
-// For checking earlier if the database is reachable
-func testDBConnection(uri string) error {
-	client, err := mongo.Connect(context.TODO(), options.Client().SetServerSelectionTimeout(3*time.Second).ApplyURI(uri))
+func getStartingIPAndPort(ip string, port string) (uint32, uint16, error) {
+	ipUint, err := parseIP(ip)
 	if err != nil {
-		return err
+		return 0, 0, fmt.Errorf("failed parsing starting IP: %s", err)
 	}
 
-	err = client.Ping(context.TODO(), nil)
+	portInt, err := strconv.Atoi(port)
 	if err != nil {
-		return err
+		return 0, 0, fmt.Errorf("failed parsing port: %s", err)
 	}
 
-	err = client.Disconnect(context.TODO())
-	if err != nil {
-		return err
-	}
+	portUint := uint16(portInt)
 
-	return nil
+	return ipUint, portUint, nil
 }
 
 // ************#*#******####*########***#####################%%%%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@%%@@@@%%%@@@@@@@@@@@@@@@@@@@

@@ -71,7 +71,7 @@ func (s Minecraft) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 
 	latency := time.Since(start).Milliseconds()
 
-	if packetLen <= 0 || packetLen > 3000000 {
+	if packetLen <= 0 || packetLen > MAX_RESPONSE_LENGTH {
 		return nil, 0, ErrMaximumResponseLength
 	}
 
@@ -89,7 +89,7 @@ func (s Minecraft) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 		return nil, 0, err
 	}
 
-	if jsonLen <= 0 || jsonLen >= 3000000 {
+	if jsonLen <= 0 || jsonLen >= MAX_RESPONSE_LENGTH {
 		return nil, 0, ErrMaximumResponseLength
 	}
 

@@ -4,19 +4,36 @@ cool scanner <(= w =)>
 
 ## Why
 
-This project started as a [C](https://github.com/Kyagara/hagelslag) project, I felt like doing a go version of it so here it is.
+Starting as a C [project](https://github.com/Kyagara/hagelslag), I felt like doing a go version of it.
 
 The `hagelslag` name came from a friend, well, eating a [Hagelslag](https://en.wikipedia.org/wiki/Hagelslag).
 
 ## How
 
-`hagelslag` works by generating all possible IP addresses, all 4.3 billion of them, in a loop, checking if they are [reserved](https://en.wikipedia.org/wiki/Reserved_IP_addresses) and sending them to the `ips` channel.
+`hagelslag` works by generating all possible IPv4 addresses, checking if they are [reserved](https://en.wikipedia.org/wiki/Reserved_IP_addresses) or not and sending them to workers.
 
-Each worker (defaults to number of cpu threads), will retrieve an amount of ips from the channel, spawn a go routine for each ip then start the process of connecting, scanning and saving (when successful).
+Each worker will wait for addresses coming from a channel, spawn a go routine for each address then start the process of connecting, scanning and saving (when successful).
+
+### CLI
+
+```bash
+-ip
+    IP address to start from, without port
+-scanner
+    Scanner to use (default: http)
+-port
+    Override the scanners port
+-uri    
+    MongoDB URI (default: mongodb://localhost:27017)
+-only-connect
+    Skip scanning, connect and save if successful (default: false)
+-rate
+    Limit of connections, be careful with this value (default: 1000)
+```
 
 ### Scanning
 
-> Requests that will be made.
+If not set to `OnlyConnect`, the scanner will do the following:
 
 - `http`: send a `GET` request.
 
@@ -32,7 +49,7 @@ Data will be inserted in the mongodb `hagelslag` database inside the `<scanner>`
 
 ```json
 {
-    "_id": "<ip>",
+    "_id": "<address>",
     "latency": 0,
     "data": ""
 }
@@ -46,9 +63,9 @@ go install github.com/Kyagara/hagelslag-go@latest
 
 ## TODO/Ideas
 
-- Improve logging.
+- Maybe an interface for both DialTCP and DialUDP.
 
-- Keep the port as the document ID?
+- Improve logging.
 
 - At high rates, DB connection errors out.
 

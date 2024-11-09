@@ -24,7 +24,11 @@ var (
 )
 
 type Hagelslag struct {
-	Scanner     Scanner
+	// This channel is embedded since its pretty contained in this struct
+	connections chan string
+
+	Scanner Scanner
+
 	StartingIP  string
 	Port        string
 	URI         string
@@ -39,26 +43,42 @@ type Scanner interface {
 	Port() string
 	// 'tcp' or 'udp'
 	Network() string
-	// Scans and returns the response and latency
+	// Responsible for sending and receiving all the necessary data for saving
 	Scan(ip string, conn net.Conn) ([]byte, int64, error)
 	// Saves the response to the database
 	Save(ip string, latency int64, data []byte, collection *mongo.Collection) error
 }
 
 func NewHagelslag() (Hagelslag, error) {
-	ip := flag.String("ip", "", "IP address to start from")
+	ip := flag.String("ip", "", "IP address to start from, without port")
 	scannerName := flag.String("scanner", "http", "Scanner to use (default: http)")
 	port := flag.String("port", "", "Override the scanners port")
 	uri := flag.String("uri", "mongodb://localhost:27017", "MongoDB URI (default: mongodb://localhost:27017)")
-	onlyConnect := flag.Bool("only-connect", false, "Only connect to IPs, skipping scan/save (default: false)")
-	rate := flag.Int("rate", 1000, "Limit of connections (default: 1000)")
+	connect := flag.Bool("only-connect", false, "Skip scanning, connect and save if successful (default: false)")
+	rate := flag.Int("rate", 1000, "Limit of connections, be careful with this value (default: 1000)")
 	flag.Parse()
 
 	h := Hagelslag{
 		StartingIP:  *ip,
 		URI:         *uri,
-		OnlyConnect: *onlyConnect,
+		OnlyConnect: *connect,
 		Rate:        *rate,
+	}
+
+	// Checking if the database is reachable
+	client, err := mongo.Connect(context.TODO(), options.Client().SetServerSelectionTimeout(3*time.Second).ApplyURI(h.URI))
+	if err != nil {
+		return Hagelslag{}, fmt.Errorf("failed to connect to database: %s", err)
+	}
+
+	err = client.Ping(context.TODO(), nil)
+	if err != nil {
+		return Hagelslag{}, fmt.Errorf("failed to ping database: %s", err)
+	}
+
+	err = client.Disconnect(context.TODO())
+	if err != nil {
+		return Hagelslag{}, fmt.Errorf("failed to disconnect from database: %s", err)
 	}
 
 	scanner := strings.ToLower(*scannerName)
@@ -80,7 +100,34 @@ func NewHagelslag() (Hagelslag, error) {
 		h.Port = h.Scanner.Port()
 	}
 
+	if h.OnlyConnect {
+		file, err := os.OpenFile("connections.out", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		if err != nil {
+			return Hagelslag{}, fmt.Errorf("failed to open file: %s", err)
+		}
+
+		h.connections = make(chan string)
+		go h.saveConnections(file)
+	}
+
 	return h, nil
+}
+
+// Wait for addresses and append them to a file
+func (h Hagelslag) saveConnections(file *os.File) {
+	defer file.Close()
+
+	portLen := len(h.Port) + 1
+
+	for address := range h.connections {
+		// Removing the port
+		address = address[:len(address)-portLen]
+
+		_, err := file.WriteString(address + "\n")
+		if err != nil {
+			os.Stderr.WriteString("\nERROR SAVE " + address + ": " + err.Error() + "\n")
+		}
+	}
 }
 
 func (h Hagelslag) worker(addresses chan string, semaphore chan struct{}, wg *sync.WaitGroup) {
@@ -92,12 +139,14 @@ func (h Hagelslag) worker(addresses chan string, semaphore chan struct{}, wg *sy
 
 	client, err := mongo.Connect(context.TODO(), options)
 	if err != nil {
-		panic(fmt.Sprintf("Error connecting to database: %s\n", err))
+		fmt.Printf("failed to connect to database: %s\n", err)
+		return
 	}
 
 	err = client.Ping(context.TODO(), nil)
 	if err != nil {
-		panic(fmt.Sprintf("Error pinging database: %s\n", err))
+		fmt.Printf("failed to ping database: %s\n", err)
+		return
 	}
 
 	name := h.Scanner.Name()
@@ -116,7 +165,7 @@ func (h Hagelslag) worker(addresses chan string, semaphore chan struct{}, wg *sy
 
 	err = client.Disconnect(context.TODO())
 	if err != nil {
-		panic(fmt.Sprintf("Error disconnecting from database: %s\n", err))
+		fmt.Printf("failed to disconnect from database: %s\n", err)
 	}
 }
 
@@ -124,21 +173,18 @@ func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string
 	// Release the slot when done
 	defer func() { <-semaphore }()
 
-	// Connect
+	// Connection
 	conn, err := dialer.Dial(network, address)
 	if err != nil {
-		// Don't log timeouts
-		if errors.Is(err, os.ErrDeadlineExceeded) {
-			return
-		}
-
-		// Ignore logging for anything else
+		// Don't log anything
 		return
 	}
+
 	defer conn.Close()
 
 	if h.OnlyConnect {
-		atomic.AddInt64(&successCount, 1)
+		atomic.AddInt64(&SUCCESS, 1)
+		h.connections <- address
 		return
 	}
 
@@ -155,12 +201,12 @@ func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string
 	}
 
 	if err != nil {
-		// Don't log timeouts, connection reset errors or  EOF
+		// Don't log these errors
 		if errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, io.EOF) {
 			return
 		}
 
-		if shuttingDown {
+		if SHUTTING_DOWN {
 			return
 		}
 
@@ -170,7 +216,7 @@ func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string
 
 	err = h.Scanner.Save(address, latency, response, collection)
 	if err != nil {
-		if shuttingDown {
+		if SHUTTING_DOWN {
 			return
 		}
 
@@ -178,5 +224,5 @@ func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string
 		return
 	}
 
-	atomic.AddInt64(&successCount, 1)
+	atomic.AddInt64(&SUCCESS, 1)
 }

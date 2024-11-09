@@ -25,7 +25,7 @@ func (s Veloren) Port() string {
 	return "14006"
 }
 
-func (s Veloren) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
+func (s Veloren) Scan(_ string, conn net.Conn) ([]byte, int64, error) {
 	request := make([]byte, 263)
 	request[13] = 1
 	header := []byte{'v', 'e', 'l', 'o', 'r', 'e', 'n'}
