@@ -18,8 +18,11 @@ const (
 	// Format used to print the current status of the program
 	STATUS_FORMAT = "\r\033[KRate: %d | Success: %d | At: %s"
 
-	// 15Mb
+	// 15mb
 	MAX_RESPONSE_LENGTH = 15 * 1024 * 1024
+
+	// 256kb
+	INITIAL_BUFFER_SIZE = 256 * 1024
 )
 
 var (
@@ -88,6 +91,7 @@ func main() {
 
 		// Increment the IP
 		default:
+			// Skip 255.x.x.x
 			if ip >= 0xFF000000 {
 				signals <- syscall.SIGTERM
 				continue

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"time"
+	"unsafe"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -71,8 +72,8 @@ func (s Minecraft) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 
 	latency := time.Since(start).Milliseconds()
 
-	if packetLen <= 0 || packetLen > MAX_RESPONSE_LENGTH {
-		return nil, 0, ErrMaximumResponseLength
+	if packetLen <= 0 {
+		return nil, 0, nil
 	}
 
 	packetID, err := s.readByte(conn)
@@ -89,30 +90,34 @@ func (s Minecraft) Scan(ip string, conn net.Conn) ([]byte, int64, error) {
 		return nil, 0, err
 	}
 
-	if jsonLen <= 0 || jsonLen >= MAX_RESPONSE_LENGTH {
-		return nil, 0, ErrMaximumResponseLength
+	if jsonLen <= 0 {
+		return nil, 0, nil
 	}
 
-	json := make([]byte, jsonLen)
-	_, err = io.ReadFull(conn, json)
+	if jsonLen > MAX_RESPONSE_LENGTH {
+		jsonLen = MAX_RESPONSE_LENGTH
+	}
+
+	response := make([]byte, jsonLen)
+	_, err = io.ReadFull(conn, response)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return json, latency, nil
+	return response, latency, nil
 }
 
 func (s Minecraft) Save(ip string, latency int64, data []byte, collection *mongo.Collection) error {
-	var result bson.D
-	err := bson.UnmarshalExtJSON(data, true, &result)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal JSON: %s", err)
-	}
-
 	document := bson.M{
 		"_id":     ip,
 		"latency": latency,
-		"data":    result,
+	}
+
+	var result bson.D
+	err := bson.UnmarshalExtJSON(data, true, &result)
+	if err != nil {
+		// If the data is not valid JSON, just save it as a string
+		document["data"] = *(*string)(unsafe.Pointer(&data))
 	}
 
 	filter := bson.M{"_id": ip}

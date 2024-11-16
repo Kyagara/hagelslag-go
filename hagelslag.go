@@ -19,10 +19,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
-var (
-	ErrMaximumResponseLength = errors.New("maximum response length exceeded")
-)
-
 type Hagelslag struct {
 	// This channel is embedded since its pretty contained in this struct
 	connections chan string
@@ -111,23 +107,6 @@ func NewHagelslag() (Hagelslag, error) {
 	}
 
 	return h, nil
-}
-
-// Wait for addresses and append them to a file
-func (h Hagelslag) saveConnections(file *os.File) {
-	defer file.Close()
-
-	portLen := len(h.Port) + 1
-
-	for address := range h.connections {
-		// Removing the port
-		address = address[:len(address)-portLen]
-
-		_, err := file.WriteString(address + "\n")
-		if err != nil {
-			os.Stderr.WriteString("\nERROR SAVE " + address + ": " + err.Error() + "\n")
-		}
-	}
 }
 
 func (h Hagelslag) worker(addresses chan string, semaphore chan struct{}, wg *sync.WaitGroup) {
@@ -225,4 +204,23 @@ func (h Hagelslag) spawn(semaphore chan struct{}, address string, network string
 	}
 
 	atomic.AddInt64(&SUCCESS, 1)
+}
+
+// Only used when OnlyConnect is true
+//
+// Wait for addresses and append them to a file
+func (h Hagelslag) saveConnections(file *os.File) {
+	defer file.Close()
+
+	portLen := len(h.Port) + 1
+
+	for address := range h.connections {
+		// Removing the port
+		address = address[:len(address)-portLen]
+
+		_, err := file.WriteString(address + "\n")
+		if err != nil {
+			os.Stderr.WriteString("\nERROR SAVE " + address + ": " + err.Error() + "\n")
+		}
+	}
 }

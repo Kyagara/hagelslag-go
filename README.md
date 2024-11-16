@@ -41,11 +41,15 @@ If not set to `OnlyConnect`, the scanner will do the following:
 
 - `veloren`: send a init packet, server info packet.
 
+Current behaviour is to read until the response reaches the limit of 15Mb or EOF is encountered.
+
 ### Saving
 
 Data will be inserted in the mongodb `hagelslag` database inside the `<scanner>` collection and will follow the structure:
 
-> `data` field can be a string (for html response) or a json object.
+> mongodb has a limit of 16Mb for a document, if a response exceeds 15Mb, the json/html that will be saved _will_ be malformed, validate the data before using it.
+
+> `data` field can be a string (for html or malformed response) or a json object.
 
 ```json
 {
@@ -67,9 +71,7 @@ go install github.com/Kyagara/hagelslag-go@latest
 
 - Improve logging.
 
-- At high rates, DB connection errors out.
-
-- Add a maximum read size to http scanner, currently it reads until EOF.
+- At high rates, DB connection errors out, maybe using bulk write can solve this.
 
 - Maybe add bedrocks servers to the Minecraft scanner.
 
