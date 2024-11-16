@@ -59,12 +59,6 @@ Data will be inserted in the mongodb `hagelslag` database inside the `<scanner>`
 }
 ```
 
-## Installing
-
-```
-go install github.com/Kyagara/hagelslag-go@latest
-```
-
 ## TODO/Ideas
 
 - Maybe an interface for both DialTCP and DialUDP.
